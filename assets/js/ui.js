@@ -5,8 +5,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { createGroup } from "./group.js";
 
-// UI helpers for authenticated navbar, profile dropdown, and dashboard group rendering.
-
 function setElementVisibility(element, shouldShow) {
   if (!element) return;
   element.style.display = shouldShow ? "" : "none";
@@ -196,14 +194,7 @@ function renderGroups(groups) {
     if (group.adminId === currentUser?.uid) {
       const badge = document.createElement("span");
       badge.textContent = "Admin";
-      badge.style.display = "inline-block";
-      badge.style.marginTop = "0.25rem";
-      badge.style.padding = "0.125rem 0.5rem";
-      badge.style.borderRadius = "999px";
-      badge.style.background = "#eef4ff";
-      badge.style.color = "#1f4ea3";
-      badge.style.fontSize = "0.75rem";
-      badge.style.fontWeight = "600";
+      badge.className = "badge badge-admin";
       card.appendChild(badge);
     }
 
@@ -212,5 +203,180 @@ function renderGroups(groups) {
     });
 
     container.appendChild(card);
+  });
+}
+
+export function setText(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value;
+}
+
+export function setGroupDetailsError(message = "") {
+  const errorEl = document.getElementById("groupDetailsError");
+  if (!errorEl) return;
+  errorEl.textContent = message;
+}
+
+export function setGroupActionMessage(message, type = "success") {
+  const container = document.getElementById("groupActionMessage");
+  if (!container) return;
+
+  if (!message) {
+    container.textContent = "";
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  container.textContent = message;
+  container.style.color = type === "error" ? "#ff9f9f" : "#9cf0b5";
+}
+
+export function setGroupLoadingState(isLoading) {
+  const indicator = document.getElementById("groupLoadingState");
+  if (!indicator) return;
+  indicator.style.display = isLoading ? "block" : "none";
+}
+
+export function setJoinButtonState({
+  show,
+  loading = false,
+  disabled = false,
+  label = "Join Group",
+}) {
+  const button = document.getElementById("joinGroupBtn");
+  if (!button) return;
+
+  button.style.display = show ? "inline-flex" : "none";
+  button.disabled = loading || disabled;
+  button.textContent = loading ? "Joining..." : label;
+}
+
+export function setStartRoundButtonState({
+  show,
+  loading = false,
+  disabled = false,
+  label = "Start Next Round",
+}) {
+  const button = document.getElementById("startRoundBtn");
+  if (!button) return;
+
+  button.style.display = show ? "inline-flex" : "none";
+  button.disabled = loading || disabled;
+  button.textContent = loading ? "Starting..." : label;
+}
+
+function makeMemberBadge(role) {
+  const badge = document.createElement("span");
+  badge.className = role === "admin" ? "badge badge-admin" : "badge badge-member";
+  badge.textContent = role === "admin" ? "Admin" : "Member";
+  return badge;
+}
+
+export function renderGroupMembers({ members, isAdmin, currentUserId, onRemove, onRoleChange }) {
+  const membersList = document.getElementById("groupMembersList");
+  if (!membersList) return;
+
+  membersList.innerHTML = "";
+
+  if (!members.length) {
+    membersList.innerHTML = '<li class="empty-state">No members yet.</li>';
+    return;
+  }
+
+  const sortedMembers = [...members].sort((a, b) => {
+    if (a.role === "admin") return -1;
+    if (b.role === "admin") return 1;
+    return a.id.localeCompare(b.id);
+  });
+
+  sortedMembers.forEach((member) => {
+    const li = document.createElement("li");
+    li.className = "member-row";
+
+    const info = document.createElement("div");
+    info.className = "member-info";
+
+    const name = document.createElement("strong");
+    name.textContent = member.id;
+    info.appendChild(name);
+
+    info.appendChild(makeMemberBadge(member.role));
+
+    const status = document.createElement("span");
+    status.className = "member-status";
+    status.textContent = member.status || "active";
+    info.appendChild(status);
+
+    li.appendChild(info);
+
+    if (isAdmin) {
+      const controls = document.createElement("div");
+      controls.className = "member-controls";
+
+      const roleSelect = document.createElement("select");
+      roleSelect.className = "member-role-select";
+      roleSelect.dataset.memberId = member.id;
+
+      const adminOption = document.createElement("option");
+      adminOption.value = "admin";
+      adminOption.textContent = "Admin";
+      roleSelect.appendChild(adminOption);
+
+      const memberOption = document.createElement("option");
+      memberOption.value = "member";
+      memberOption.textContent = "Member";
+      roleSelect.appendChild(memberOption);
+
+      roleSelect.value = member.role === "admin" ? "admin" : "member";
+      roleSelect.disabled = member.id === currentUserId;
+      roleSelect.addEventListener("change", async () => {
+        if (typeof onRoleChange === "function") {
+          await onRoleChange(member.id, roleSelect.value);
+        }
+      });
+
+      controls.appendChild(roleSelect);
+
+      if (member.role !== "admin") {
+        const removeButton = document.createElement("button");
+        removeButton.className = "btn-danger";
+        removeButton.type = "button";
+        removeButton.textContent = "Remove";
+        removeButton.addEventListener("click", async () => {
+          if (typeof onRemove === "function") {
+            await onRemove(member.id);
+          }
+        });
+        controls.appendChild(removeButton);
+      }
+
+      li.appendChild(controls);
+    }
+
+    membersList.appendChild(li);
+  });
+}
+
+export function renderRounds({ rounds, memberMap }) {
+  const roundsList = document.getElementById("roundHistoryList");
+  if (!roundsList) return;
+
+  roundsList.innerHTML = "";
+
+  if (!rounds.length) {
+    roundsList.innerHTML = '<li class="empty-state">No rounds yet.</li>';
+    return;
+  }
+
+  rounds.forEach((round) => {
+    const li = document.createElement("li");
+    li.className = "round-row";
+
+    const payoutName = memberMap.get(round.payoutUserId) || round.payoutUserId || "-";
+    li.textContent = `Round ${round.roundNumber}: ${payoutName} — ${round.status || "pending"}`;
+
+    roundsList.appendChild(li);
   });
 }

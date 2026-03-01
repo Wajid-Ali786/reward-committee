@@ -43,12 +43,23 @@
       <p><strong>Status:</strong> <span id="groupDetailsStatus">-</span></p>
       <p><strong>Current Round:</strong> <span id="groupDetailsRound">-</span></p>
       <p><strong>Admin ID:</strong> <span id="groupDetailsAdmin">-</span></p>
+      <div class="group-actions">
+        <button id="joinGroupBtn" class="btn-primary" type="button" style="display: none;">Join Group</button>
+        <button id="startRoundBtn" class="btn-primary" type="button" style="display: none;">Start Next Round</button>
+      </div>
+      <p id="groupLoadingState" style="display: none;">Loading group data...</p>
+      <p id="groupActionMessage" style="display: none;"></p>
       <p id="groupDetailsError" style="color: #b3261e;"></p>
     </section>
 
     <section class="dashboard-section">
       <h3>Members</h3>
       <ul id="groupMembersList"></ul>
+    </section>
+
+    <section class="dashboard-section">
+      <h3>Round History</h3>
+      <ul id="roundHistoryList"></ul>
     </section>
   </main>
 

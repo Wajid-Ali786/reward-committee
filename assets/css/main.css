@@ -309,3 +309,192 @@ body,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* profile dropdown */
+.profile-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.profile-icon {
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--text-muted);
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  padding: 0.5rem;
+  box-shadow: var(--shadow-subtle);
+}
+
+.profile-dropdown {
+  min-width: 170px;
+  z-index: 10;
+  font-family: inherit;
+  font-weight: 500;
+  animation: fadeInDown 0.17s linear;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-dropdown a {
+  position: relative;
+  padding: 0.42rem 1.2rem;
+  color: var(--text-main);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  margin-bottom: 2px;
+  transition: background 0.16s, color 0.16s;
+  font-weight: 500;
+}
+
+.profile-dropdown a:last-child {
+  margin-bottom: 0;
+}
+
+.profile-dropdown a:hover,
+.profile-dropdown a.active {
+  background: var(--primary);
+  color: #fff !important;
+}
+
+.dashboard-section {
+  background: var(--bg-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 2rem;
+  margin: 2rem auto;
+  max-width: 1100px;
+}
+
+.dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 1.45rem;
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  background: transparent;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: background 0.16s, color 0.13s;
+  margin-bottom: 0.35rem;
+}
+
+.dashboard-link:hover,
+.dashboard-link.active {
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: 0 3px 16px -2px rgba(0,0,0,0.07);
+}
+
+.dashboard-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Optional: You can tweak these or remove if you use buttons instead of links */
+.dashboard-link svg {
+  width: 1.2em;
+  height: 1.2em;
+  display: inline;
+}
+
+
+.group-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-admin {
+  background: #eef4ff;
+  color: #1f4ea3;
+}
+
+.badge-member {
+  background: #0f2f2d;
+  color: #8cf0d0;
+}
+
+.member-row,
+.round-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.member-status {
+  text-transform: capitalize;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.member-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.member-role-select {
+  border-radius: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background: rgba(15, 23, 42, 0.92);
+  color: var(--text-main);
+  padding: 0.3rem 0.45rem;
+}
+
+.btn-danger {
+  border: 1px solid rgba(239, 68, 68, 0.95);
+  background: rgba(239, 68, 68, 0.2);
+  color: #ffd9d9;
+  border-radius: 999px;
+  padding: 0.32rem 0.8rem;
+  cursor: pointer;
+}
+
+.empty-state {
+  color: var(--text-muted);
+  padding: 0.35rem 0;
+}
