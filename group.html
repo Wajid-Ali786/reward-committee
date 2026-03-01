@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reward Committee - Group</title>
+  <link rel="stylesheet" href="assets/css/main.css" />
+</head>
+
+<body>
+  <header class="app-header">
+    <nav class="app-nav">
+      <div class="nav-left">
+        <a href="index.html" class="logo">Reward Committee</a>
+      </div>
+      <div class="nav-right">
+        <div id="navLoggedOut">
+          <a href="login.html">Login</a>
+          <a href="register.html">Register</a>
+        </div>
+
+        <div id="navLoggedIn" style="display: none;">
+          <div class="profile-wrapper">
+            <button id="profileBtn" class="profile-icon" type="button">👤</button>
+
+            <div id="profileDropdown" class="profile-dropdown" style="display: none;">
+              <p id="navUserName"></p>
+              <p id="navUserEmail"></p>
+              <hr />
+              <a href="dashboard.html">Dashboard</a>
+              <button id="logoutBtn" type="button">Logout</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <section class="dashboard-section">
+      <h2 id="groupDetailsName">Group</h2>
+      <p><strong>Status:</strong> <span id="groupDetailsStatus">-</span></p>
+      <p><strong>Current Round:</strong> <span id="groupDetailsRound">-</span></p>
+      <p><strong>Admin ID:</strong> <span id="groupDetailsAdmin">-</span></p>
+      <p id="groupDetailsError" style="color: #b3261e;"></p>
+    </section>
+
+    <section class="dashboard-section">
+      <h3>Members</h3>
+      <ul id="groupMembersList"></ul>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>&copy; <span id="year-placeholder">2026</span> Reward Committee</p>
+  </footer>
+
+  <script type="module" src="assets/js/firebase-config.js"></script>
+  <script type="module" src="assets/js/auth.js"></script>
+  <script type="module" src="assets/js/ui.js"></script>
+  <script type="module" src="assets/js/router.js"></script>
+  <script type="module" src="assets/js/group-details.js"></script>
+  <script type="module">
+    import { initAuthListener } from "./assets/js/auth.js";
+    import { protectDashboard } from "./assets/js/router.js";
+
+    initAuthListener();
+    protectDashboard();
+  </script>
+</body>
+
+</html>
