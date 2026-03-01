@@ -1,6 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
@@ -8,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   doc,
-  setDoc,
+  runTransaction,
   getDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -42,15 +43,43 @@ function setRegisterError(message) {
   errorContainer.style.display = "block";
 }
 
-export async function registerUser(name, email, password) {
+function normalizeUsername(username) {
+  return (username || "").trim().toLowerCase();
+}
+
+function validateUsername(username) {
+  const normalized = normalizeUsername(username);
+  if (!normalized) {
+    return "Please choose a username.";
+  }
+
+  if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+    return "Username must be 3-20 characters and use only lowercase letters, numbers, or underscore.";
+  }
+
+  return "";
+}
+
+export async function registerUser(name, username, email, password) {
   setRegisterError("");
 
-  if (!name || !email || !password) {
-    setRegisterError("Please fill in all required fields.");
+  const fullName = (name || "").trim();
+  const normalizedUsername = normalizeUsername(username);
+  const usernameError = validateUsername(normalizedUsername);
+
+  if (!fullName || !email || !password || usernameError) {
+    setRegisterError(usernameError || "Please fill in all required fields.");
     return;
   }
 
   try {
+    const usernameRef = doc(db, "usernames", normalizedUsername);
+    const usernameSnap = await getDoc(usernameRef);
+    if (usernameSnap.exists()) {
+      setRegisterError("That username is already taken. Please choose another one.");
+      return;
+    }
+
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -58,15 +87,37 @@ export async function registerUser(name, email, password) {
     );
     const { uid } = userCredential.user;
 
-    await setDoc(doc(db, "users", uid), {
-      name,
-      email,
-      roleGlobal: "member",
-      status: "active",
-      createdAt: serverTimestamp(),
-    });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const claimedUsername = await transaction.get(usernameRef);
+        if (claimedUsername.exists()) {
+          throw new Error("USERNAME_TAKEN");
+        }
 
-    // Only redirect after Firestore document is successfully created.
+        transaction.set(doc(db, "users", uid), {
+          name: fullName,
+          fullName,
+          username: normalizedUsername,
+          email,
+          roleGlobal: "member",
+          status: "active",
+          createdAt: serverTimestamp(),
+        });
+
+        transaction.set(usernameRef, {
+          uid,
+          createdAt: serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      await deleteUser(userCredential.user);
+      if (error?.message === "USERNAME_TAKEN") {
+        setRegisterError("That username is already taken. Please choose another one.");
+        return;
+      }
+      throw error;
+    }
+
     window.location.href = "dashboard.html";
   } catch (error) {
     console.error(
@@ -87,14 +138,16 @@ if (registerForm) {
     event.preventDefault();
 
     const nameInput = document.getElementById("register-name");
+    const usernameInput = document.getElementById("register-username");
     const emailInput = document.getElementById("register-email");
     const passwordInput = document.getElementById("register-password");
 
     const name = nameInput?.value?.trim() ?? "";
+    const username = usernameInput?.value?.trim() ?? "";
     const email = emailInput?.value?.trim() ?? "";
     const password = passwordInput?.value ?? "";
 
-    await registerUser(name, email, password);
+    await registerUser(name, username, email, password);
   });
 }
 

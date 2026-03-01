@@ -53,7 +53,7 @@ export function updateUIForLoggedIn(userData) {
 
   if (nameEl) {
     const name =
-      userData?.name || userData?.displayName || userData?.email || "Member";
+      userData?.username || userData?.fullName || userData?.name || userData?.displayName || userData?.email || "Member";
     nameEl.textContent = name;
   }
 
@@ -288,7 +288,7 @@ export function renderGroupMembers({ members, isAdmin, currentUserId, onRemove, 
   const sortedMembers = [...members].sort((a, b) => {
     if (a.role === "admin") return -1;
     if (b.role === "admin") return 1;
-    return a.id.localeCompare(b.id);
+    return (a.username || "").localeCompare(b.username || "");
   });
 
   sortedMembers.forEach((member) => {
@@ -299,8 +299,13 @@ export function renderGroupMembers({ members, isAdmin, currentUserId, onRemove, 
     info.className = "member-info";
 
     const name = document.createElement("strong");
-    name.textContent = member.id;
+    name.textContent = member.username || "unknown_user";
     info.appendChild(name);
+
+    const fullName = document.createElement("span");
+    fullName.className = "member-status";
+    fullName.textContent = member.fullName || "Unknown Member";
+    info.appendChild(fullName);
 
     info.appendChild(makeMemberBadge(member.role));
 
@@ -374,9 +379,101 @@ export function renderRounds({ rounds, memberMap }) {
     const li = document.createElement("li");
     li.className = "round-row";
 
-    const payoutName = memberMap.get(round.payoutUserId) || round.payoutUserId || "-";
-    li.textContent = `Round ${round.roundNumber}: ${payoutName} — ${round.status || "pending"}`;
-
+    const payoutUsername = round.payoutUsername || memberMap.get(round.payoutUserId) || "-";
+    const approvedTotal = Number(round.totalApprovedAmount || 0);
+    const completedAt = round.completedAt?.toDate?.() || null;
+    const completionText = completedAt ? completedAt.toLocaleString() : "In progress";
+    li.textContent = `Round ${round.roundNumber}: ${payoutUsername} (${round.payoutFullName || "Unknown Member"}) — Approved ${approvedTotal.toFixed(2)} — ${completionText}`;
+    
     roundsList.appendChild(li);
   });
+}
+
+export function renderSubmissionStatus({ submission, roundStatus, payoutUsername }) {
+  const container = document.getElementById("memberSubmissionStatus");
+  if (!container) return;
+
+  const status = submission?.status || "not_submitted";
+  const adminNote = submission?.adminNote || "";
+
+  container.innerHTML = `
+    <p><strong>Round status:</strong> ${roundStatus || "pending"}</p>
+    <p><strong>Payout username:</strong> ${payoutUsername || "-"}</p>
+    <p><strong>Your submission status:</strong> ${status}</p>
+    ${status === "rejected" ? `<p><strong>Admin note:</strong> ${adminNote || "No note provided"}</p>` : ""}
+  `;
+}
+
+export function renderAdminSubmissions({ submissions, onApprove, onReject }) {
+  const container = document.getElementById("adminSubmissionsList");
+  if (!container) return;
+
+  container.innerHTML = "";
+  if (!submissions.length) {
+    container.innerHTML = "<p>No submissions yet.</p>";
+    return;
+  }
+
+  submissions.forEach((submission) => {
+    const row = document.createElement("div");
+    row.className = "member-row";
+
+    const info = document.createElement("div");
+    info.className = "member-info";
+    info.innerHTML = `
+      <strong>${submission.username || "unknown_user"}</strong>
+      <span class="member-status">${submission.fullName || "Unknown Member"}</span>
+      <span class="member-status">${submission.brand || "-"}</span>
+      <span class="member-status">${Number(submission.giftCardAmount || 0).toFixed(2)}</span>
+      <span class="member-status">${submission.status || "pending"}</span>
+    `;
+
+    row.appendChild(info);
+
+    if (submission.status === "pending") {
+      const controls = document.createElement("div");
+      controls.className = "member-controls";
+
+      const approveBtn = document.createElement("button");
+      approveBtn.type = "button";
+      approveBtn.className = "btn-primary";
+      approveBtn.textContent = "Approve";
+      approveBtn.addEventListener("click", async () => {
+        if (typeof onApprove === "function") {
+          await onApprove(submission.uid || submission.id);
+        }
+      });
+
+      const rejectBtn = document.createElement("button");
+      rejectBtn.type = "button";
+      rejectBtn.className = "btn-danger";
+      rejectBtn.textContent = "Reject";
+      rejectBtn.addEventListener("click", async () => {
+        if (typeof onReject === "function") {
+          await onReject(submission.uid || submission.id);
+        }
+      });
+
+      controls.appendChild(approveBtn);
+      controls.appendChild(rejectBtn);
+      row.appendChild(controls);
+    }
+
+    container.appendChild(row);
+  });
+}
+
+export function renderAdminSummary(summary) {
+  const container = document.getElementById("adminSummary");
+  if (!container) return;
+
+  container.innerHTML = `
+    <p><strong>Total members:</strong> ${summary.totalMembers}</p>
+    <p><strong>Submitted count:</strong> ${summary.submittedCount}</p>
+    <p><strong>Approved count:</strong> ${summary.approvedCount}</p>
+    <p><strong>Rejected count:</strong> ${summary.rejectedCount}</p>
+    <p><strong>Total expected amount:</strong> ${summary.totalExpectedAmount.toFixed(2)}</p>
+    <p><strong>Total approved amount:</strong> ${summary.totalApprovedAmount.toFixed(2)}</p>
+    <p><strong>Current payout username:</strong> ${summary.currentPayoutUsername || "-"}</p>
+  `;
 }

@@ -7,6 +7,9 @@ import {
   updateMemberRole,
   getGroupRounds,
   startNextRound,
+  submitGiftCard,
+  getRoundSubmissions,
+  reviewSubmission,
 } from "./group.js";
 import {
   setText,
@@ -17,6 +20,9 @@ import {
   setStartRoundButtonState,
   renderGroupMembers,
   renderRounds,
+  renderSubmissionStatus,
+  renderAdminSubmissions,
+  renderAdminSummary,
 } from "./ui.js";
 
 function getGroupIdFromUrl() {
@@ -36,6 +42,25 @@ async function waitForCurrentUserData(timeoutMs = 5000) {
   }
 
   return null;
+}
+
+function getCurrentRound(rounds) {
+  return rounds.find((round) => round.status === "pending") || rounds[0] || null;
+}
+
+function getSummary({ members, submissions, currentRound }) {
+  const approved = submissions.filter((item) => item.status === "approved");
+  const rejected = submissions.filter((item) => item.status === "rejected");
+
+  return {
+    totalMembers: members.length,
+    submittedCount: submissions.length,
+    approvedCount: approved.length,
+    rejectedCount: rejected.length,
+    totalExpectedAmount: submissions.reduce((sum, item) => sum + Number(item.giftCardAmount || 0), 0),
+    totalApprovedAmount: approved.reduce((sum, item) => sum + Number(item.giftCardAmount || 0), 0),
+    currentPayoutUsername: currentRound?.payoutUsername || "-",
+  };
 }
 
 async function loadGroupPage() {
@@ -68,14 +93,14 @@ async function loadGroupPage() {
     setText("groupDetailsName", group.name || "Unnamed Group");
     setText("groupDetailsStatus", group.status || "-");
     setText("groupDetailsRound", String(group.currentRound ?? "-"));
-    setText("groupDetailsAdmin", group.adminId || "-");
+    setText("groupDetailsAdmin", group.adminUsername || "-");
 
     const currentMembership = await getMember(groupId, currentUser.uid);
     setJoinButtonState({ show: !currentMembership, loading: false });
     setStartRoundButtonState({ show: isAdmin, loading: false });
 
     const members = await getGroupMembers(groupId);
-    const memberMap = new Map(members.map((member) => [member.id, member.id]));
+    const memberMap = new Map(members.map((member) => [member.id, member.username || member.id]));
 
     renderGroupMembers({
       members,
@@ -108,10 +133,59 @@ async function loadGroupPage() {
     });
 
     const rounds = await getGroupRounds(groupId);
+    const currentRound = getCurrentRound(rounds);
     renderRounds({ rounds, memberMap });
+    setText("currentPayoutUsername", currentRound?.payoutUsername || "-");
+
+    const submissions = currentRound ? await getRoundSubmissions(groupId, currentRound.id) : [];
+    const currentUserSubmission = submissions.find((item) => (item.uid || item.id) === currentUser.uid) || null;
+
+    renderSubmissionStatus({
+      submission: currentUserSubmission,
+      roundStatus: currentRound?.status || "pending",
+      payoutUsername: currentRound?.payoutUsername || "-",
+    });
+
+    const memberPanel = document.getElementById("memberPanel");
+    const adminPanel = document.getElementById("adminPanel");
+    const submissionForm = document.getElementById("giftCardSubmissionForm");
+
+    if (memberPanel) memberPanel.style.display = currentMembership ? "" : "none";
+    if (adminPanel) adminPanel.style.display = isAdmin ? "" : "none";
+    if (submissionForm) submissionForm.style.display = currentMembership ? "" : "none";
+
+    if (isAdmin) {
+      renderAdminSubmissions({
+        submissions,
+        onApprove: async (submissionUid) => {
+          try {
+            await reviewSubmission(groupId, currentRound.id, submissionUid, currentUser.uid, "approved");
+            setGroupActionMessage("Submission approved.", "success");
+            await loadGroupPage();
+          } catch (error) {
+            console.error("[group-details] Failed to approve submission:", error);
+            setGroupActionMessage(error?.message || "Failed to approve submission.", "error");
+          }
+        },
+        onReject: async (submissionUid) => {
+          const note = window.prompt("Enter rejection note:") || "";
+          try {
+            await reviewSubmission(groupId, currentRound.id, submissionUid, currentUser.uid, "rejected", note);
+            setGroupActionMessage("Submission rejected.", "success");
+            await loadGroupPage();
+          } catch (error) {
+            console.error("[group-details] Failed to reject submission:", error);
+            setGroupActionMessage(error?.message || "Failed to reject submission.", "error");
+          }
+        },
+      });
+
+      renderAdminSummary(getSummary({ members, submissions, currentRound }));
+    }
 
     attachJoinHandler(groupId);
     attachStartRoundHandler(groupId, currentUser.uid);
+    attachSubmissionHandler(groupId, currentRound?.id, currentUser.uid);
   } catch (error) {
     console.error("[group-details] Failed to load group details:", error);
     setGroupDetailsError("Unable to load group details.");
@@ -155,7 +229,7 @@ function attachStartRoundHandler(groupId, currentUserId) {
     try {
       const result = await startNextRound(groupId, currentUserId);
       setGroupActionMessage(
-        `Round ${result.roundNumber} started successfully.`,
+        `Round ${result.roundNumber} started. Payout user: ${result.payoutUsername}.`,
         "success",
       );
       await loadGroupPage();
@@ -163,6 +237,43 @@ function attachStartRoundHandler(groupId, currentUserId) {
       console.error("[group-details] Failed to start next round:", error);
       setGroupActionMessage(error?.message || "Failed to start round.", "error");
       setStartRoundButtonState({ show: true, loading: false });
+    }
+  };
+}
+
+function attachSubmissionHandler(groupId, roundId, userId) {
+  const form = document.getElementById("giftCardSubmissionForm");
+  if (!form) return;
+
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+
+    if (!roundId) {
+      setGroupActionMessage("No active round available for submission.", "error");
+      return;
+    }
+
+    const giftCardCode = document.getElementById("giftCardCode")?.value?.trim() || "";
+    const giftCardAmount = document.getElementById("giftCardAmount")?.value || "";
+    const brand = document.getElementById("giftCardBrand")?.value?.trim() || "";
+
+    if (!giftCardCode || !giftCardAmount || !brand) {
+      setGroupActionMessage("Please complete all gift card submission fields.", "error");
+      return;
+    }
+
+    try {
+      await submitGiftCard(groupId, roundId, userId, {
+        giftCardCode,
+        giftCardAmount,
+        brand,
+      });
+      form.reset();
+      setGroupActionMessage("Gift card submitted successfully.", "success");
+      await loadGroupPage();
+    } catch (error) {
+      console.error("[group-details] Failed to submit gift card:", error);
+      setGroupActionMessage(error?.message || "Failed to submit gift card.", "error");
     }
   };
 }
