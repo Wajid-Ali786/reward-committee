@@ -498,3 +498,235 @@ body,
   color: var(--text-muted);
   padding: 0.35rem 0;
 }
+.group-overview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.overview-stats-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.overview-stat {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.overview-stat span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.overview-stat strong {
+  font-size: 1.05rem;
+}
+
+.payout-highlight {
+  margin-top: 1rem;
+  background: linear-gradient(120deg, rgba(56, 189, 248, 0.26), rgba(37, 99, 235, 0.2));
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  border-radius: 12px;
+  padding: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.payout-highlight span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.payout-highlight strong {
+  font-size: 1.3rem;
+  color: #7dd3fc;
+}
+
+.round-progress-block {
+  margin-top: 1rem;
+}
+
+.round-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.round-progress-track {
+  height: 10px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.round-progress-fill {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #38bdf8);
+  transition: width 220ms ease-out;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.62rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-pending {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.status-approved {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.status-rejected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.status-completed {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.submission-form-card {
+  max-width: 540px;
+  padding: 1.1rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.form-field select,
+.form-field input[readonly] {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.75);
+  padding: 0.55rem 0.7rem;
+  background: rgba(15, 23, 42, 0.92);
+  color: var(--text-main);
+  font-size: 0.92rem;
+}
+
+.form-field input[readonly] {
+  opacity: 0.85;
+  cursor: not-allowed;
+}
+
+.submissions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.8rem;
+  font-size: 0.9rem;
+}
+
+.submissions-table th,
+.submissions-table td {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.7rem 0.4rem;
+  text-align: left;
+}
+
+.submissions-table th {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.table-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.submissions-table button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.timeline-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: rgba(15, 23, 42, 0.5);
+  margin-bottom: 0.6rem;
+}
+
+.centered-empty {
+  text-align: center;
+  width: 100%;
+  display: block;
+  padding: 1rem 0;
+}
+
+.toast-viewport {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  z-index: 1200;
+}
+
+.toast {
+  min-width: 220px;
+  max-width: 360px;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid;
+  box-shadow: var(--shadow-subtle);
+  animation: fadeInDown 0.2s ease-out;
+}
+
+.toast-success {
+  background: rgba(21, 128, 61, 0.92);
+  border-color: rgba(134, 239, 172, 0.8);
+  color: #ecfdf5;
+}
+
+.toast-error {
+  background: rgba(185, 28, 28, 0.92);
+  border-color: rgba(254, 202, 202, 0.8);
+  color: #fef2f2;
+}
+
+.toast-leaving {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+}
+
+
+.btn-small {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  margin-left: 0.45rem;
+}
+
+.code-cell {
+  white-space: nowrap;
+}

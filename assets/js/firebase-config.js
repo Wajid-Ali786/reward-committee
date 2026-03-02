@@ -24,5 +24,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { app, auth, db };
+// Small app salt for client-side encryption (MVP). Change to a secure server key in production.
+export const ENCRYPTION_SALT = "replace-with-your-own-short-salt";
 
+export { app, auth, db };

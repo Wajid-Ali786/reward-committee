@@ -4,6 +4,7 @@ import {
   getDocs,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { createGroup } from "./group.js";
+import { decryptCardCode } from "./crypto-utils.js";
 
 function setElementVisibility(element, shouldShow) {
   if (!element) return;
@@ -231,6 +232,30 @@ export function setGroupActionMessage(message, type = "success") {
   container.style.display = "block";
   container.textContent = message;
   container.style.color = type === "error" ? "#ff9f9f" : "#9cf0b5";
+  
+  showToast(message, type);
+}
+
+function showToast(message, type = "success") {
+  if (!message) return;
+
+  let viewport = document.getElementById("toastViewport");
+  if (!viewport) {
+    viewport = document.createElement("div");
+    viewport.id = "toastViewport";
+    viewport.className = "toast-viewport";
+    document.body.appendChild(viewport);
+  }
+
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type === "error" ? "error" : "success"}`;
+  toast.textContent = message;
+  viewport.appendChild(toast);
+
+  window.setTimeout(() => {
+    toast.classList.add("toast-leaving");
+    window.setTimeout(() => toast.remove(), 220);
+  }, 2800);
 }
 
 export function setGroupLoadingState(isLoading) {
@@ -371,22 +396,41 @@ export function renderRounds({ rounds, memberMap }) {
   roundsList.innerHTML = "";
 
   if (!rounds.length) {
-    roundsList.innerHTML = '<li class="empty-state">No rounds yet.</li>';
+    roundsList.innerHTML = '<li class="empty-state centered-empty">No rounds started yet</li>';
     return;
   }
 
   rounds.forEach((round) => {
     const li = document.createElement("li");
-    li.className = "round-row";
+    li.className = "round-row timeline-card";
 
     const payoutUsername = round.payoutUsername || memberMap.get(round.payoutUserId) || "-";
     const approvedTotal = Number(round.totalApprovedAmount || 0);
     const completedAt = round.completedAt?.toDate?.() || null;
     const completionText = completedAt ? completedAt.toLocaleString() : "In progress";
-    li.textContent = `Round ${round.roundNumber}: ${payoutUsername} (${round.payoutFullName || "Unknown Member"}) — Approved ${approvedTotal.toFixed(2)} — ${completionText}`;
+    li.innerHTML = `
+      <div>
+        <p><strong>Round ${round.roundNumber ?? "-"}</strong></p>
+        <p>Payout username: <strong>${payoutUsername}</strong></p>
+        <p>Total approved amount: <strong>${approvedTotal.toFixed(2)}</strong></p>
+        <p>Completion date: <strong>${completionText}</strong></p>
+      </div>
+      <div>${createStatusBadgeHtml(round.status || "pending")}</div>
+    `;
     
     roundsList.appendChild(li);
   });
+}
+
+function createStatusBadgeHtml(status) {
+  const normalizedStatus = (status || "pending").toLowerCase();
+  const labels = {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    completed: "Completed",
+  };
+  return `<span class="status-badge status-${normalizedStatus}">${labels[normalizedStatus] || status}</span>`;
 }
 
 export function renderSubmissionStatus({ submission, roundStatus, payoutUsername }) {
@@ -395,72 +439,115 @@ export function renderSubmissionStatus({ submission, roundStatus, payoutUsername
 
   const status = submission?.status || "not_submitted";
   const adminNote = submission?.adminNote || "";
+  const maskedCode = submission?.maskedCode || "-";
 
   container.innerHTML = `
     <p><strong>Round status:</strong> ${roundStatus || "pending"}</p>
     <p><strong>Payout username:</strong> ${payoutUsername || "-"}</p>
-    <p><strong>Your submission status:</strong> ${status}</p>
+    <p><strong>Your submission status:</strong> ${createStatusBadgeHtml(status)}</p>
+    <p><strong>Your card code:</strong> ${maskedCode}</p>
     ${status === "rejected" ? `<p><strong>Admin note:</strong> ${adminNote || "No note provided"}</p>` : ""}
   `;
 }
 
-export function renderAdminSubmissions({ submissions, onApprove, onReject }) {
+export function renderAdminSubmissions({ submissions, onApprove, onReject, groupId }) {
   const container = document.getElementById("adminSubmissionsList");
   if (!container) return;
 
   container.innerHTML = "";
   if (!submissions.length) {
-    container.innerHTML = "<p>No submissions yet.</p>";
+    container.innerHTML = '<p class="empty-state centered-empty">No submissions yet</p>';
     return;
   }
 
-  submissions.forEach((submission) => {
-    const row = document.createElement("div");
-    row.className = "member-row";
-
-    const info = document.createElement("div");
-    info.className = "member-info";
-    info.innerHTML = `
-      <strong>${submission.username || "unknown_user"}</strong>
-      <span class="member-status">${submission.fullName || "Unknown Member"}</span>
-      <span class="member-status">${submission.brand || "-"}</span>
-      <span class="member-status">${Number(submission.giftCardAmount || 0).toFixed(2)}</span>
-      <span class="member-status">${submission.status || "pending"}</span>
+  const table = document.createElement("table");
+  table.className = "submissions-table";
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Full Name</th>
+        <th>Brand</th>
+        <th>Amount</th>
+        <th>Status</th>
+        <th>Card Code</th>
+        <th>Actions</th>
+        </tr>
+      </thead>
     `;
 
-    row.appendChild(info);
+  const tbody = document.createElement("tbody");
+  
+    submissions.forEach((submission) => {
+      const row = document.createElement("tr");
+      const isPending = (submission.status || "pending") === "pending";
+      row.innerHTML = `
+        <td>${submission.username || "unknown_user"}</td>
+        <td>${submission.fullName || "Unknown Member"}</td>
+        <td>${submission.brand || "-"}</td>
+        <td>${Number(submission.giftCardAmount || 0).toFixed(2)}</td>
+        <td>${createStatusBadgeHtml(submission.status || "pending")}</td>
+        <td class="code-cell"></td>
+        <td class="table-actions"></td>
+      `;
 
-    if (submission.status === "pending") {
-      const controls = document.createElement("div");
-      controls.className = "member-controls";
+      const codeCell = row.querySelector(".code-cell");
+      const masked = submission.maskedCode || "-";
+      const codeText = document.createElement("span");
+      codeText.textContent = masked;
+      codeCell?.appendChild(codeText);
+  
+      if (submission.encryptedCode && groupId) {
+        const toggleCodeBtn = document.createElement("button");
+        toggleCodeBtn.type = "button";
+        toggleCodeBtn.className = "btn-primary btn-small";
+        toggleCodeBtn.textContent = "Show code";
+        let revealed = false;
+        toggleCodeBtn.addEventListener("click", () => {
+          revealed = !revealed;
+          if (revealed) {
+            const fullCode = decryptCardCode(groupId, submission.encryptedCode) || masked;
+            codeText.textContent = fullCode;
+            toggleCodeBtn.textContent = "Hide code";
+            console.info("[admin] decrypted card code viewed", submission.uid || submission.id);
+          } else {
+            codeText.textContent = masked;
+            toggleCodeBtn.textContent = "Show code";
+      }
+    });
+    codeCell?.appendChild(toggleCodeBtn);
+  }
 
-      const approveBtn = document.createElement("button");
-      approveBtn.type = "button";
-      approveBtn.className = "btn-primary";
-      approveBtn.textContent = "Approve";
-      approveBtn.addEventListener("click", async () => {
-        if (typeof onApprove === "function") {
-          await onApprove(submission.uid || submission.id);
-        }
-      });
-
-      const rejectBtn = document.createElement("button");
-      rejectBtn.type = "button";
-      rejectBtn.className = "btn-danger";
-      rejectBtn.textContent = "Reject";
-      rejectBtn.addEventListener("click", async () => {
-        if (typeof onReject === "function") {
-          await onReject(submission.uid || submission.id);
-        }
-      });
-
-      controls.appendChild(approveBtn);
-      controls.appendChild(rejectBtn);
-      row.appendChild(controls);
+  const actionsCell = row.querySelector(".table-actions");
+  const approveBtn = document.createElement("button");
+  approveBtn.type = "button";
+  approveBtn.className = "btn-primary";
+  approveBtn.textContent = "Approve";
+  approveBtn.disabled = !isPending;
+  approveBtn.addEventListener("click", async () => {
+    if (typeof onApprove === "function") {
+      await onApprove(submission.uid || submission.id);
     }
-
-    container.appendChild(row);
   });
+
+  const rejectBtn = document.createElement("button");
+  rejectBtn.type = "button";
+  rejectBtn.className = "btn-danger";
+  rejectBtn.textContent = "Reject";
+  rejectBtn.disabled = !isPending;
+  rejectBtn.addEventListener("click", async () => {
+    if (typeof onReject === "function") {
+      await onReject(submission.uid || submission.id);
+    }
+  });
+      
+  actionsCell?.appendChild(approveBtn);
+  actionsCell?.appendChild(rejectBtn);
+  tbody.appendChild(row);
+  });
+
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 export function renderAdminSummary(summary) {
@@ -476,4 +563,34 @@ export function renderAdminSummary(summary) {
     <p><strong>Total approved amount:</strong> ${summary.totalApprovedAmount.toFixed(2)}</p>
     <p><strong>Current payout username:</strong> ${summary.currentPayoutUsername || "-"}</p>
   `;
+}
+
+export function renderGroupOverview(summary) {
+  setText("overviewTotalMembers", String(summary.totalMembers || 0));
+  setText("overviewApprovedCount", String(summary.approvedCount || 0));
+  setText("overviewPendingCount", String(summary.pendingCount || 0));
+  setText("overviewTotalExpected", Number(summary.totalExpectedAmount || 0).toFixed(2));
+  setText("overviewTotalApproved", Number(summary.totalApprovedAmount || 0).toFixed(2));
+}
+
+export function renderRoundProgress({ approvedCount = 0, totalMembers = 0 }) {
+  const safeTotal = Math.max(0, Number(totalMembers || 0));
+  const safeApproved = Math.max(0, Number(approvedCount || 0));
+  const percent = safeTotal > 0 ? Math.min(100, Math.round((safeApproved / safeTotal) * 100)) : 0;
+
+  const label = document.getElementById("roundProgressLabel");
+  const fill = document.getElementById("roundProgressFill");
+  const track = document.querySelector(".round-progress-track");
+
+  if (label) {
+    label.textContent = `${percent}% (${safeApproved}/${safeTotal})`;
+  }
+
+  if (fill) {
+    fill.style.width = `${percent}%`;
+  }
+
+  if (track) {
+    track.setAttribute("aria-valuenow", String(percent));
+  }
 }

@@ -23,6 +23,8 @@ import {
   renderSubmissionStatus,
   renderAdminSubmissions,
   renderAdminSummary,
+  renderGroupOverview,
+  renderRoundProgress,
 } from "./ui.js";
 
 function getGroupIdFromUrl() {
@@ -48,6 +50,29 @@ function getCurrentRound(rounds) {
   return rounds.find((round) => round.status === "pending") || rounds[0] || null;
 }
 
+function setMemberSubmitInfo(message = "") {
+  const info = document.getElementById("memberSubmitInfo");
+  if (!info) return;
+  info.textContent = message;
+  info.style.display = message ? "block" : "none";
+}
+
+function setContributionAmountField(group) {
+  const amountInput = document.getElementById("giftCardAmount");
+  if (!amountInput) return;
+
+  const amount = Number(group?.contributionAmount || 0);
+  if (amount > 0) {
+    amountInput.value = amount.toFixed(2);
+    amountInput.readOnly = true;
+  } else {
+    amountInput.readOnly = false;
+    if (!amountInput.value) {
+      amountInput.value = "";
+    }
+  }
+}
+
 function getSummary({ members, submissions, currentRound }) {
   const approved = submissions.filter((item) => item.status === "approved");
   const rejected = submissions.filter((item) => item.status === "rejected");
@@ -56,6 +81,7 @@ function getSummary({ members, submissions, currentRound }) {
     totalMembers: members.length,
     submittedCount: submissions.length,
     approvedCount: approved.length,
+    pendingCount: submissions.filter((item) => item.status === "pending").length,
     rejectedCount: rejected.length,
     totalExpectedAmount: submissions.reduce((sum, item) => sum + Number(item.giftCardAmount || 0), 0),
     totalApprovedAmount: approved.reduce((sum, item) => sum + Number(item.giftCardAmount || 0), 0),
@@ -94,6 +120,7 @@ async function loadGroupPage() {
     setText("groupDetailsStatus", group.status || "-");
     setText("groupDetailsRound", String(group.currentRound ?? "-"));
     setText("groupDetailsAdmin", group.adminUsername || "-");
+    setContributionAmountField(group);
 
     const currentMembership = await getMember(groupId, currentUser.uid);
     setJoinButtonState({ show: !currentMembership, loading: false });
@@ -138,13 +165,25 @@ async function loadGroupPage() {
     setText("currentPayoutUsername", currentRound?.payoutUsername || "-");
 
     const submissions = currentRound ? await getRoundSubmissions(groupId, currentRound.id) : [];
+    const summary = getSummary({ members, submissions, currentRound });
     const currentUserSubmission = submissions.find((item) => (item.uid || item.id) === currentUser.uid) || null;
+   
+    renderGroupOverview(summary);
+    renderRoundProgress({ approvedCount: summary.approvedCount, totalMembers: summary.totalMembers });
 
     renderSubmissionStatus({
       submission: currentUserSubmission,
       roundStatus: currentRound?.status || "pending",
       payoutUsername: currentRound?.payoutUsername || "-",
     });
+
+    if (currentUserSubmission?.status === "pending") {
+      setMemberSubmitInfo("Your submission is pending review.");
+    } else if (currentUserSubmission?.status === "approved") {
+      setMemberSubmitInfo("Your submission was approved; you cannot modify it.");
+    } else {
+      setMemberSubmitInfo("");
+    }
 
     const memberPanel = document.getElementById("memberPanel");
     const adminPanel = document.getElementById("adminPanel");
@@ -157,6 +196,7 @@ async function loadGroupPage() {
     if (isAdmin) {
       renderAdminSubmissions({
         submissions,
+        groupId,
         onApprove: async (submissionUid) => {
           try {
             await reviewSubmission(groupId, currentRound.id, submissionUid, currentUser.uid, "approved");
@@ -180,12 +220,12 @@ async function loadGroupPage() {
         },
       });
 
-      renderAdminSummary(getSummary({ members, submissions, currentRound }));
+      renderAdminSummary(summary);
     }
 
     attachJoinHandler(groupId);
     attachStartRoundHandler(groupId, currentUser.uid);
-    attachSubmissionHandler(groupId, currentRound?.id, currentUser.uid);
+    attachSubmissionHandler(groupId, currentRound?.id, currentUser.uid, currentUserSubmission, group);
   } catch (error) {
     console.error("[group-details] Failed to load group details:", error);
     setGroupDetailsError("Unable to load group details.");
@@ -241,9 +281,32 @@ function attachStartRoundHandler(groupId, currentUserId) {
   };
 }
 
-function attachSubmissionHandler(groupId, roundId, userId) {
+function attachSubmissionHandler(groupId, roundId, userId, existingSubmission, group) {
   const form = document.getElementById("giftCardSubmissionForm");
+  const resubmitToggle = document.getElementById("resubmitToggleBtn");
   if (!form) return;
+
+  const shouldDisable = existingSubmission?.status === "pending" || existingSubmission?.status === "approved";
+  const submitButton = document.getElementById("giftCardSubmitBtn");
+  if (submitButton) {
+    submitButton.disabled = shouldDisable;
+  }
+
+  if (resubmitToggle) {
+    const showResubmit = existingSubmission?.status === "rejected";
+    resubmitToggle.style.display = showResubmit ? "inline-flex" : "none";
+    resubmitToggle.onclick = () => {
+      const brandInput = document.getElementById("giftCardBrand");
+      const codeInput = document.getElementById("giftCardCode");
+      const amountInput = document.getElementById("giftCardAmount");
+      if (brandInput) brandInput.value = existingSubmission?.brand || "";
+      if (codeInput) codeInput.value = "";
+      if (amountInput && Number(group?.contributionAmount || 0) > 0) {
+        amountInput.value = Number(group.contributionAmount).toFixed(2);
+      }
+      setMemberSubmitInfo("Resubmitting rejected submission. Please re-enter card code.");
+    };
+  }
 
   form.onsubmit = async (event) => {
     event.preventDefault();
@@ -263,6 +326,11 @@ function attachSubmissionHandler(groupId, roundId, userId) {
     }
 
     try {
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "Submitting...";
+      }
+
       await submitGiftCard(groupId, roundId, userId, {
         giftCardCode,
         giftCardAmount,
@@ -274,6 +342,11 @@ function attachSubmissionHandler(groupId, roundId, userId) {
     } catch (error) {
       console.error("[group-details] Failed to submit gift card:", error);
       setGroupActionMessage(error?.message || "Failed to submit gift card.", "error");
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Submit Gift Card";
+      }
     }
   };
 }

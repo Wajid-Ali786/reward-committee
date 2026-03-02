@@ -13,6 +13,7 @@ import {
   orderBy,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { encryptCardCode, maskCode } from "./crypto-utils.js";
 
 const GROUPS_COLLECTION = "groups";
 
@@ -271,29 +272,79 @@ export async function submitGiftCard(groupId, roundId, userId, submissionData) {
 
   const member = await getMember(groupId, userId);
   if (!member || member.status !== "active") {
-    throw new Error("Only active group members can submit.");
+    throw new Error("You are not a group member.");
   }
 
-  const submissionRef = doc(db, GROUPS_COLLECTION, groupId, "rounds", roundId, "submissions", userId);
-  const existingSubmission = await getDoc(submissionRef);
-  if (existingSubmission.exists()) {
-    throw new Error("You have already submitted a gift card for this round.");
+  const group = await getGroup(groupId);
+  const requestedAmount = Number(submissionData.giftCardAmount || 0);
+  const contributionAmount = Number(group?.contributionAmount || 0);
+  if (contributionAmount > 0 && requestedAmount !== contributionAmount) {
+    throw new Error("Amount must equal group contribution amount.");
   }
 
   const profile = await getUserProfile(userId);
+  const submissionRef = doc(db, GROUPS_COLLECTION, groupId, "rounds", roundId, "submissions", userId);
+  const existingSnapshot = await getDoc(submissionRef);
+  const existingSubmission = existingSnapshot.exists() ? existingSnapshot.data() : null;
+
+  if (existingSubmission?.status === "approved") {
+    throw new Error("Approved submissions cannot be modified.");
+  }
+
+  if (existingSubmission?.status === "pending") {
+    throw new Error("Cannot resubmit while pending.");
+  }
+
+  // Encryption enforced before Firestore write; plain code is never persisted.
+  const encryptedCode = encryptCardCode(groupId, submissionData.giftCardCode || "");
+  const maskedCode = maskCode(submissionData.giftCardCode || "");
+  const submissionPath = `groups/${groupId}/rounds/${roundId}/submissions/${userId}`;
+  const nextVersion = Number(existingSubmission?.version || 0) + 1;
 
   await setDoc(submissionRef, {
     uid: userId,
     username: profile.username,
     fullName: profile.fullName,
-    giftCardCode: submissionData.giftCardCode,
-    giftCardAmount: Number(submissionData.giftCardAmount || 0),
+    encryptedCode,
+    maskedCode,
+    giftCardAmount: contributionAmount > 0 ? contributionAmount : requestedAmount,
     brand: submissionData.brand,
     status: "pending",
     adminNote: "",
     submittedAt: serverTimestamp(),
     verifiedAt: null,
+    version: nextVersion,
   });
+  
+  await addDoc(collection(db, "cards"), {
+    groupId,
+    roundId,
+    submissionId: submissionPath,
+    username: profile.username,
+    fullName: profile.fullName,
+    maskedCode,
+    giftCardAmount: contributionAmount > 0 ? contributionAmount : requestedAmount,
+    brand: submissionData.brand,
+    status: "pending",
+    submittedAt: serverTimestamp(),
+    version: nextVersion,
+  });
+
+  return {
+    status: "pending",
+    version: nextVersion,
+    maskedCode,
+  };
+}
+
+async function syncCardIndexStatus({ groupId, roundId, submissionUid, updates }) {
+  const submissionPath = `groups/${groupId}/rounds/${roundId}/submissions/${submissionUid}`;
+  const cardsRef = collection(db, "cards");
+  const cardsQuery = query(cardsRef, where("submissionId", "==", submissionPath));
+  const cardsSnap = await getDocs(cardsQuery);
+
+  const tasks = cardsSnap.docs.map((cardDoc) => updateDoc(cardDoc.ref, updates));
+  await Promise.all(tasks);
 }
 
 export async function reviewSubmission(groupId, roundId, submissionUid, adminUid, status, adminNote = "") {
@@ -331,6 +382,34 @@ export async function reviewSubmission(groupId, roundId, submissionUid, adminUid
     adminNote: status === "rejected" ? (adminNote || "No note provided") : "",
     verifiedAt: serverTimestamp(),
   });
+  
+  await syncCardIndexStatus({
+    groupId,
+    roundId,
+    submissionUid,
+    updates: {
+      status,
+    },
+  });
+
+  const roundRef = doc(db, GROUPS_COLLECTION, groupId, "rounds", roundId);
+  const allSubmissions = await getRoundSubmissions(groupId, roundId);
+  const approvedSubmissions = allSubmissions.filter((item) => item.status === "approved");
+  const totalApprovedAmount = approvedSubmissions.reduce((sum, item) => sum + Number(item.giftCardAmount || 0), 0);
+  const activeMembers = await getActiveGroupMembers(groupId);
+
+  if (approvedSubmissions.length === activeMembers.length && activeMembers.length > 0) {
+    await updateDoc(roundRef, {
+      status: "completed",
+      completedAt: serverTimestamp(),
+      totalApprovedAmount,
+    });
+  } else {
+    await updateDoc(roundRef, {
+      status: "pending",
+      totalApprovedAmount,
+    });
+  }
 }
 
 export async function approveJoinRequest(groupId, requestId) {
